@@ -4,7 +4,7 @@ class TextToSQL(dspy.Signature):
     """Generate SQL from natural language.
 
         Database schema:
-          - produtos: nome, departamento
+          - produtos: produto, departamento
     """
     dbschema = dspy.InputField(desc="Databases schema")
     question = dspy.InputField(desc="Natural language question")

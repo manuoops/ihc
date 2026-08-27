@@ -13,7 +13,7 @@ no bot_services.py original. Reparem que db_services.py cria a coluna
 como "departamento" (correto). Isso e' uma inconsistencia que ja existia
 no codigo original -- vale conferir com calma se ela nao esta atrapalhando
 o modelo a gerar o SQL certo, ja que o schema que o LM ve nao bate 100%
-com o schema real do banco.
+com o schema real do banco. 
 """
 
 import sqlite3
@@ -25,8 +25,8 @@ from text_to_sql import ReliableSQLGenerator
 def generate(question):
     schema = """
     CREATE TABLE produtos (
-      nome VARCHAR(50),
-      departmento VARCHAR(50),
+      produto VARCHAR(50),
+      departamento VARCHAR(50),
     );
     """
     generator = ReliableSQLGenerator()
