@@ -7,13 +7,6 @@ pergunta -> gera SQL (dominio) -> executa SQL (dados) -> resultado.
 
 E' a antiga funcao generate() de bot_services.py, agora sem a definicao
 da classe geradora misturada no mesmo arquivo.
-
-NOTA: o schema abaixo tem "departmento" (sem o segundo "a"), igual estava
-no bot_services.py original. Reparem que db_services.py cria a coluna
-como "departamento" (correto). Isso e' uma inconsistencia que ja existia
-no codigo original -- vale conferir com calma se ela nao esta atrapalhando
-o modelo a gerar o SQL certo, ja que o schema que o LM ve nao bate 100%
-com o schema real do banco. 
 """
 
 import sqlite3
@@ -27,12 +20,26 @@ def generate(question):
     CREATE TABLE produtos (
       produto VARCHAR(50),
       departamento VARCHAR(50),
+      id INTEGER,
+      data_fabri DATE,
+      data_venc DATE,
+      custos FLOAT,
+      fornecedor VARCHAR(50)
     );
     """
     generator = ReliableSQLGenerator()
-    sql = generator.forward(schema, question)
-    print(sql)
-    conn = sqlite3.connect(db_services.db_path())
-    print(sql.sql_query)
-    results = conn.execute(sql.sql_query).fetchall()
-    return results
+    result = generator.forward(schema, question)
+
+    if not result["success"]:
+        print(f"[erro na geracao/validacao] {result['error']}")
+        return {"success": False, "error": result["error"], "results": None}
+
+    try:
+        conn = sqlite3.connect(db_services.db_path())
+        results = conn.execute(result["sql_query"]).fetchall()
+        conn.close()
+    except sqlite3.Error as e:
+        print(f"[erro ao executar no banco real] {e}")
+        return {"success": False, "error": f"Erro ao executar: {e}", "results": None}
+
+    return {"success": True, "error": None, "results": results}
