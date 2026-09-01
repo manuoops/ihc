@@ -42,4 +42,7 @@ def generate(question):
         print(f"[erro ao executar no banco real] {e}")
         return {"success": False, "error": f"Erro ao executar: {e}", "results": None}
 
+    if not results:
+        return {"success": False, "error": "Nenhum produto encontrado.", "results": []}
+
     return {"success": True, "error": None, "results": results}
