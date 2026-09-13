@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import re
 
 import dspy
 from fastapi import FastAPI
@@ -88,6 +89,26 @@ class ReliableSQLGenerator(dspy.Module):
 
         return {"success": True, "sql_query": sql_query, "error": None}
 
+def is_select_only(sql: str) -> bool:
+    if not sql:
+        return False
+    cleaned = re.sub(r";\s*$", "", sql.strip())
+    if ";" in cleaned:
+        return False
+    match = re.match(r"^\s*(\w+)", cleaned, re.IGNORECASE)
+    # antes, se tivesse select em minúsculo já barrava, e não queremos isso.
+    # agora transforma ele antes em upper pra conferir certinho
+    if not match or match.group(1).upper() != "SELECT":
+        return False
+    forbidden = r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|ATTACH|DETACH|PRAGMA|REPLACE|VACUUM)\b"
+    if re.search(forbidden, cleaned, re.IGNORECASE):
+        return False
+    return True
+
+
+def _read_only_authorizer(action_code, arg1, arg2, db_name, trigger_name):
+    READ_ONLY_ACTIONS = {sqlite3.SQLITE_SELECT, sqlite3.SQLITE_READ, sqlite3.SQLITE_FUNCTION}
+    return sqlite3.SQLITE_OK if action_code in READ_ONLY_ACTIONS else sqlite3.SQLITE_DENY
 
 def generate(question):
     schema = """
@@ -111,23 +132,24 @@ def generate(question):
         print(f"[erro na geracao/validacao] {result['error']}")
         return {"success": False, "error": result["error"], "results": None}
 
-    if "SELECT" in result["sql_query"]:
-        try:
-            conn = sqlite3.connect(db_path())
-            results = conn.execute(result["sql_query"]).fetchall()
-            conn.close()
-        except sqlite3.Error as e:
-            print(f"[erro ao executar no banco real] {e}")
-            return {
-                "success": False,
-                "error": f"Erro ao executar: {e}",
-                "results": None
-            }
-    else:
-        print("Erro. Nao pode")
+    if not is_select_only(result["sql_query"]):
+        print("Erro. Impedido")
         return {
             "success": False,
             "error": "A consulta gerada não é um SELECT.",
+            "results": None
+        }
+
+    try:
+        conn = sqlite3.connect(db_path())
+        conn.set_authorizer(_read_only_authorizer)
+        results = conn.execute(result["sql_query"]).fetchall()
+        conn.close()
+    except sqlite3.Error as e:
+        print(f"[erro ao executar no banco real] {e}")
+        return {
+            "success": False,
+            "error": f"Erro ao executar: {e}",
             "results": None
         }
 
@@ -144,7 +166,7 @@ def generate(question):
         "results": results
     }
 
-
+    
 app = FastAPI()
 
 configure_llm()

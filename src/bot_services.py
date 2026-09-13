@@ -18,7 +18,7 @@ def build_bot(token):
 
 
 def return_token():
-    return '8907184614:AAFnacPSofvc7YeiBhgO8I34JAiajOF3wgw' # token aqui
+    return '' # token aqui
 
 
 server_services.configure_llm()
