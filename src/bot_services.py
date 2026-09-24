@@ -1,10 +1,13 @@
 import json
 import os
 import re
-import sqlite3
 
 import dspy
 import telebot
+
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+OPTIMIZED_MODEL_PATH = os.path.join(BASE_DIR, "sql_generator_optimized.json")
 
 
 def configure_llm():
@@ -13,45 +16,9 @@ def configure_llm():
     return lm
 
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "lojas.db")
-_SCHEMA_SQL = """CREATE TABLE IF NOT EXISTS produtos (
-                produto TEXT, departamento TEXT, id INT, data_fabri DATE,
-                data_venc DATE, custos FLOAT, fornecedor TEXT)"""
-SCHEMA = """CREATE TABLE produtos (
-  produto VARCHAR(50), departamento VARCHAR(50), id INTEGER, data_fabri DATE,
-  data_venc DATE, custos FLOAT, fornecedor VARCHAR(50));"""
-_INITIAL_PRODUCTS = [
-  ("sabonete", "higiene", 123, "2026-04-21", "2027-08-21", 23.50, "john"),
-  ("agua", "bebidas", 234, "2026-04-22", "2029-08-22", 3.50, "lennon"),
-  ("coca", "bebidas", 123, "2026-05-03", "2027-04-12", 7.00, "WOAH")
-]
-OPTIMIZED_MODEL_PATH = os.path.join(BASE_DIR, "sql_generator_optimized.json")
-
-
-def db_path():
-  return DB_PATH
-
-
-def create_db():
-  conn = sqlite3.connect(DB_PATH)
-  c = conn.cursor()
-  c.execute(_SCHEMA_SQL)
-  c.executemany("INSERT INTO produtos VALUES (?, ?, ?, ?, ?, ?, ?)", _INITIAL_PRODUCTS)
-  conn.commit()
-  conn.close()
-
-
-def create_in_memory_validation_db():
-  conn = sqlite3.connect(":memory:")
-  conn.execute(_SCHEMA_SQL)
-  conn.commit()
-  return conn
-
-
 class TextToSQL(dspy.Signature):
     """Generate a valid SQLite SELECT query from natural language."""
-    dbschema = dspy.InputField(desc="Databases schema")
+    dbschema = dspy.InputField(desc="Database schema")
     question = dspy.InputField(desc="Natural language question")
     sql_query = dspy.OutputField(desc="Valid SQL query starting with SELECT")
 
@@ -69,70 +36,36 @@ def sanitize_sql(raw_sql):
     return re.sub(r"```sql|```", "", raw_sql, flags=re.IGNORECASE).strip()
 
 
-def validate_sql(sql_query):
-    if not sql_query.upper().startswith("SELECT"):
-        return False, "Operação negada: apenas consultas SELECT são permitidas."
+def generate_sql(question, schema):
     try:
-        validation_conn = create_in_memory_validation_db()
-        validation_conn.execute(sql_query)
-        validation_conn.close()
-        return True, None
-    except sqlite3.Error as error:
-        return False, f"SQL inválido: {error}"
-
-
-def generate(question):
-    try:
-        prediction = generator(schema=SCHEMA, question=question)
-        sql_query = sanitize_sql(prediction.sql_query)
+        prediction = generator(schema=schema, question=question)
+        return {"success": True, "sql_query": sanitize_sql(prediction.sql_query), "error": None}
     except Exception as error:
-        return {"success": False, "error": f"Erro ao gerar SQL: {error}", "results": None}
-    print(sql_query)
-    is_valid, error = validate_sql(sql_query)
-    if not is_valid:
-        return {"success": False, "error": error, "results": None}
-    try:
-        conn = sqlite3.connect(db_path())
-        results = conn.execute(sql_query).fetchall()
-        conn.close()
-    except sqlite3.Error as error:
-        return {"success": False, "error": f"Erro ao executar: {error}", "results": None}
-    if not results:
-        return {"success": False, "error": "Nenhum produto encontrado.", "results": []}
-    return {"success": True, "error": None, "results": results}
+        return {"success": False, "sql_query": None, "error": f"Erro ao gerar SQL: {error}"}
 
 
-trainset = [
-    dspy.Example(schema=SCHEMA, question="Qual o departamento do sabonete?", sql_query="SELECT departamento FROM produtos WHERE produto = 'sabonete';").with_inputs("schema", "question"),
-    dspy.Example(schema=SCHEMA, question="Quais bebidas temos no estoque?", sql_query="SELECT * FROM produtos WHERE departamento = 'bebidas';").with_inputs("schema", "question"),
-    dspy.Example(schema=SCHEMA, question="Qual é o produto mais caro?", sql_query="SELECT produto, custos FROM produtos ORDER BY custos DESC LIMIT 1;").with_inputs("schema", "question"),
-    dspy.Example(schema=SCHEMA, question="Quais produtos vencem em 2027?", sql_query="SELECT * FROM produtos WHERE data_venc LIKE '2027%';").with_inputs("schema", "question"),
-    dspy.Example(schema=SCHEMA, question="Quantos produtos de higiene existem?", sql_query="SELECT COUNT(*) AS total FROM produtos WHERE departamento = 'higiene';").with_inputs("schema", "question"),
-]
+def create_trainset(schema):
+    return [
+        dspy.Example(schema=schema, question="Qual o departamento do sabonete?", sql_query="SELECT departamento FROM produtos WHERE produto = 'sabonete';").with_inputs("schema", "question"),
+        dspy.Example(schema=schema, question="Quais bebidas temos no estoque?", sql_query="SELECT * FROM produtos WHERE departamento = 'bebidas';").with_inputs("schema", "question"),
+        dspy.Example(schema=schema, question="Qual é o produto mais caro?", sql_query="SELECT produto, custos FROM produtos ORDER BY custos DESC LIMIT 1;").with_inputs("schema", "question"),
+        dspy.Example(schema=schema, question="Quais produtos vencem em 2027?", sql_query="SELECT * FROM produtos WHERE data_venc LIKE '2027%';").with_inputs("schema", "question"),
+        dspy.Example(schema=schema, question="Quantos produtos de higiene existem?", sql_query="SELECT COUNT(*) AS total FROM produtos WHERE departamento = 'higiene';").with_inputs("schema", "question"),
+    ]
 
 
-def sql_execution_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
-    pred_sql = sanitize_sql(getattr(pred, "sql_query", ""))
-    if not pred_sql.upper().startswith("SELECT"):
+def sql_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+    predicted_sql = sanitize_sql(getattr(pred, "sql_query", ""))
+    if not predicted_sql.upper().startswith("SELECT"):
         return dspy.Prediction(score=0.0, feedback="A query deve começar obrigatoriamente com SELECT.")
-    conn = sqlite3.connect(":memory:")
-    conn.execute(_SCHEMA_SQL)
-    conn.executemany("INSERT INTO produtos VALUES (?, ?, ?, ?, ?, ?, ?)", _INITIAL_PRODUCTS)
-    try:
-        gold_results = conn.execute(gold.sql_query).fetchall()
-        pred_results = conn.execute(pred_sql).fetchall()
-    except sqlite3.Error as error:
-        return dspy.Prediction(score=0.0, feedback=f"Erro de sintaxe SQLite ao executar a query '{pred_sql}': {error}")
-    finally:
-        conn.close()
-    if gold_results == pred_results:
-        return dspy.Prediction(score=1.0, feedback="SQL executado com sucesso e os dados retornados estão corretos.")
-    return dspy.Prediction(score=0.0, feedback=f"Resultados diferentes. Esperado: {gold_results}; recebido: {pred_results}.")
+    if predicted_sql.upper() == gold.sql_query.upper():
+        return dspy.Prediction(score=1.0, feedback="Query SELECT correta.")
+    return dspy.Prediction(score=0.0, feedback="A query não corresponde ao resultado esperado.")
 
 
-def train_gepa():
-    teleprompter = dspy.GEPA(metric=sql_execution_metric, reflection_lm=lm, auto="light")
-    optimized_program = teleprompter.compile(student=ReliableSQLGenerator(), trainset=trainset)
+def train_gepa(schema):
+    optimizer = dspy.GEPA(metric=sql_metric, reflection_lm=lm, auto="light")
+    optimized_program = optimizer.compile(student=ReliableSQLGenerator(), trainset=create_trainset(schema))
     optimized_program.save(OPTIMIZED_MODEL_PATH)
     return OPTIMIZED_MODEL_PATH
 
@@ -142,7 +75,8 @@ def build_bot(token):
 
     @bot.message_handler(func=lambda message: True)
     def reply_hi(message):
-        bot.reply_to(message, json.dumps(generate(message.text)))
+        import server_services
+        bot.reply_to(message, json.dumps(server_services.query_database(message.text)))
 
     return bot
 
@@ -156,7 +90,6 @@ generator = ReliableSQLGenerator()
 if os.path.exists(OPTIMIZED_MODEL_PATH):
     generator.load(OPTIMIZED_MODEL_PATH)
     print("Modelo DSPy otimizado com GEPA carregado com sucesso.")
-create_db()
 
 
 if __name__ == "__main__":
