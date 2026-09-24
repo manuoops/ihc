@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 
 import telebot
@@ -18,7 +19,7 @@ def build_bot(token):
 
 
 def return_token():
-    return '8907184614:AAFnacPSofvc7YeiBhgO8I34JAiajOF3wgw' # token aqui
+    return os.environ["TELEGRAM_BOT_TOKEN"]
 
 
 server_services.configure_llm()
