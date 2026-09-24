@@ -8,6 +8,17 @@ import telebot
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OPTIMIZED_MODEL_PATH = os.path.join(BASE_DIR, "sql_generator_optimized.json")
+ENV_PATH = os.path.join(os.path.dirname(BASE_DIR), ".env")
+
+
+def load_env():
+    if not os.path.exists(ENV_PATH):
+        return
+    with open(ENV_PATH, encoding="utf-8") as env_file:
+        for line in env_file:
+            key, separator, value = line.strip().partition("=")
+            if separator and key and not key.startswith("#"):
+                os.environ.setdefault(key, value)
 
 
 def configure_llm():
@@ -85,6 +96,7 @@ def return_token():
     return os.environ["TELEGRAM_BOT_TOKEN"]
 
 
+load_env()
 lm = configure_llm()
 generator = ReliableSQLGenerator()
 if os.path.exists(OPTIMIZED_MODEL_PATH):
