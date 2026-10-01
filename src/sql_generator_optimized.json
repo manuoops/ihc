@@ -1,0 +1,36 @@
+{
+  "generate_sql.predict": {
+    "traces": [],
+    "train": [],
+    "demos": [],
+    "signature": {
+      "instructions": "Generate SQLite SQL from natural language.\n\nUse SELECT for questions. Use INSERT INTO produtos only when the user asks\nto add a product. If only the product name is given, insert only the produto\ncolumn. Never generate UPDATE, DELETE, DROP, or other commands.",
+      "fields": [
+        {
+          "prefix": "Dbschema:",
+          "description": "Database schema"
+        },
+        {
+          "prefix": "Question:",
+          "description": "Natural language question"
+        },
+        {
+          "prefix": "Reasoning:",
+          "description": "${reasoning}"
+        },
+        {
+          "prefix": "Sql Query:",
+          "description": "Valid SQLite SELECT or INSERT INTO produtos query"
+        }
+      ]
+    },
+    "lm": null
+  },
+  "metadata": {
+    "dependency_versions": {
+      "python": "3.14",
+      "dspy": "3.3.1",
+      "cloudpickle": "3.1"
+    }
+  }
+}

@@ -14,6 +14,7 @@ ENV_PATH = os.path.join(os.path.dirname(BASE_DIR), ".env")
 def load_env():
     if not os.path.exists(ENV_PATH):
         return
+
     with open(ENV_PATH, encoding="utf-8") as env_file:
         for line in env_file:
             key, separator, value = line.strip().partition("=")
@@ -22,16 +23,26 @@ def load_env():
 
 
 def configure_llm():
-    lm = dspy.LM('openai/gemma-4-E2B-it-IQ4_XS', api_base='http://localhost:1337/v1', api_key='not-needed')
+    lm = dspy.LM(
+        "openai/gemma-4-E2B-it-IQ4_XS",
+        api_base="http://localhost:1337/v1",
+        api_key="not-needed",
+    )
     dspy.configure(lm=lm)
     return lm
 
 
 class TextToSQL(dspy.Signature):
-    """Generate a valid SQLite SELECT query from natural language."""
+    """Generate SQLite SQL from natural language.
+
+    Use SELECT for questions. Use INSERT INTO produtos only when the user asks
+    to add a product. If only the product name is given, insert only the produto
+    column. Never generate UPDATE, DELETE, DROP, or other commands.
+    """
+
     dbschema = dspy.InputField(desc="Database schema")
     question = dspy.InputField(desc="Natural language question")
-    sql_query = dspy.OutputField(desc="Valid SQL query starting with SELECT")
+    sql_query = dspy.OutputField(desc="Valid SQLite SELECT or INSERT INTO produtos query")
 
 
 class ReliableSQLGenerator(dspy.Module):
@@ -56,27 +67,57 @@ def generate_sql(question, schema):
 
 
 def create_trainset(schema):
+    examples = [
+        ("Qual o departamento do sabonete?", "SELECT departamento FROM produtos WHERE produto = 'sabonete';"),
+        ("Quais bebidas temos no estoque?", "SELECT * FROM produtos WHERE departamento = 'bebidas';"),
+        ("Qual é o produto mais caro?", "SELECT produto, custos FROM produtos ORDER BY custos DESC LIMIT 1;"),
+        ("Quais produtos vencem em 2027?", "SELECT * FROM produtos WHERE data_venc LIKE '2027%';"),
+        ("Quantos produtos de higiene existem?", "SELECT COUNT(*) AS total FROM produtos WHERE departamento = 'higiene';"),
+        ("Insira sabonetes vonný no estoque.", "INSERT INTO produtos (produto) VALUES ('sabonetes vonný');"),
+    ]
     return [
-        dspy.Example(schema=schema, question="Qual o departamento do sabonete?", sql_query="SELECT departamento FROM produtos WHERE produto = 'sabonete';").with_inputs("schema", "question"),
-        dspy.Example(schema=schema, question="Quais bebidas temos no estoque?", sql_query="SELECT * FROM produtos WHERE departamento = 'bebidas';").with_inputs("schema", "question"),
-        dspy.Example(schema=schema, question="Qual é o produto mais caro?", sql_query="SELECT produto, custos FROM produtos ORDER BY custos DESC LIMIT 1;").with_inputs("schema", "question"),
-        dspy.Example(schema=schema, question="Quais produtos vencem em 2027?", sql_query="SELECT * FROM produtos WHERE data_venc LIKE '2027%';").with_inputs("schema", "question"),
-        dspy.Example(schema=schema, question="Quantos produtos de higiene existem?", sql_query="SELECT COUNT(*) AS total FROM produtos WHERE departamento = 'higiene';").with_inputs("schema", "question"),
+        dspy.Example(dbschema=schema, question=question, sql_query=sql_query).with_inputs("dbschema", "question")
+        for question, sql_query in examples
     ]
 
 
 def sql_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+    import server_services
+
     predicted_sql = sanitize_sql(getattr(pred, "sql_query", ""))
-    if not predicted_sql.upper().startswith("SELECT"):
-        return dspy.Prediction(score=0.0, feedback="A query deve começar obrigatoriamente com SELECT.")
-    if predicted_sql.upper() == gold.sql_query.upper():
-        return dspy.Prediction(score=1.0, feedback="Query SELECT correta.")
-    return dspy.Prediction(score=0.0, feedback="A query não corresponde ao resultado esperado.")
+    is_valid, error = server_services.validate_sql(predicted_sql)
+    if not is_valid:
+        return dspy.Prediction(score=0.0, feedback=error)
+
+    expected_conn = server_services.create_validation_db(include_products=True)
+    received_conn = server_services.create_validation_db(include_products=True)
+    try:
+        expected_cursor = expected_conn.execute(gold.sql_query)
+        received_cursor = received_conn.execute(predicted_sql)
+
+        if gold.sql_query.upper().startswith("SELECT"):
+            expected = expected_cursor.fetchall()
+            received = received_cursor.fetchall()
+        else:
+            expected = expected_conn.execute("SELECT * FROM produtos ORDER BY rowid").fetchall()
+            received = received_conn.execute("SELECT * FROM produtos ORDER BY rowid").fetchall()
+    finally:
+        expected_conn.close()
+        received_conn.close()
+
+    if received == expected:
+        return dspy.Prediction(score=1.0, feedback="SQL correto e com o resultado esperado.")
+    return dspy.Prediction(score=0.0, feedback=f"Resultado incorreto. Esperado: {expected}; recebido: {received}.")
 
 
-def train_gepa(schema):
+def train_gepa():
+    import server_services
+
     optimizer = dspy.GEPA(metric=sql_metric, reflection_lm=lm, auto="light")
-    optimized_program = optimizer.compile(student=ReliableSQLGenerator(), trainset=create_trainset(schema))
+    optimized_program = optimizer.compile(
+        student=ReliableSQLGenerator(),
+        trainset=create_trainset(server_services.SCHEMA),
+    )
     optimized_program.save(OPTIMIZED_MODEL_PATH)
     return OPTIMIZED_MODEL_PATH
 
@@ -92,8 +133,9 @@ def build_bot(token):
     return bot
 
 
-def return_token():
-    return os.environ["TELEGRAM_BOT_TOKEN"]
+def run():
+    token = os.environ["TELEGRAM_BOT_TOKEN"]
+    build_bot(token).polling()
 
 
 load_env()
@@ -101,9 +143,10 @@ lm = configure_llm()
 generator = ReliableSQLGenerator()
 if os.path.exists(OPTIMIZED_MODEL_PATH):
     generator.load(OPTIMIZED_MODEL_PATH)
-    print("Modelo DSPy otimizado com GEPA carregado com sucesso.")
 
 
 if __name__ == "__main__":
-    bot = build_bot(return_token())
-    bot.polling()
+    if "--train" in os.sys.argv:
+        print(f"Modelo otimizado salvo em: {train_gepa()}")
+    else:
+        run()
