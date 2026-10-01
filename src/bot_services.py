@@ -33,16 +33,11 @@ def configure_llm():
 
 
 class TextToSQL(dspy.Signature):
-    """Generate SQLite SQL from natural language.
-
-    Use SELECT for questions. Use INSERT INTO produtos only when the user asks
-    to add a product. If only the product name is given, insert only the produto
-    column. Never generate UPDATE, DELETE, DROP, or other commands.
-    """
+    """Generate a valid SQLite SELECT query from natural language."""
 
     dbschema = dspy.InputField(desc="Database schema")
     question = dspy.InputField(desc="Natural language question")
-    sql_query = dspy.OutputField(desc="Valid SQLite SELECT or INSERT INTO produtos query")
+    sql_query = dspy.OutputField(desc="Valid SQLite SELECT query")
 
 
 class ReliableSQLGenerator(dspy.Module):
@@ -73,7 +68,6 @@ def create_trainset(schema):
         ("Qual é o produto mais caro?", "SELECT produto, custos FROM produtos ORDER BY custos DESC LIMIT 1;"),
         ("Quais produtos vencem em 2027?", "SELECT * FROM produtos WHERE data_venc LIKE '2027%';"),
         ("Quantos produtos de higiene existem?", "SELECT COUNT(*) AS total FROM produtos WHERE departamento = 'higiene';"),
-        ("Insira sabonetes vonný no estoque.", "INSERT INTO produtos (produto) VALUES ('sabonetes vonný');"),
     ]
     return [
         dspy.Example(dbschema=schema, question=question, sql_query=sql_query).with_inputs("dbschema", "question")
@@ -89,21 +83,12 @@ def sql_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
     if not is_valid:
         return dspy.Prediction(score=0.0, feedback=error)
 
-    expected_conn = server_services.create_validation_db(include_products=True)
-    received_conn = server_services.create_validation_db(include_products=True)
+    conn = server_services.create_validation_db(include_products=True)
     try:
-        expected_cursor = expected_conn.execute(gold.sql_query)
-        received_cursor = received_conn.execute(predicted_sql)
-
-        if gold.sql_query.upper().startswith("SELECT"):
-            expected = expected_cursor.fetchall()
-            received = received_cursor.fetchall()
-        else:
-            expected = expected_conn.execute("SELECT * FROM produtos ORDER BY rowid").fetchall()
-            received = received_conn.execute("SELECT * FROM produtos ORDER BY rowid").fetchall()
+        expected = conn.execute(gold.sql_query).fetchall()
+        received = conn.execute(predicted_sql).fetchall()
     finally:
-        expected_conn.close()
-        received_conn.close()
+        conn.close()
 
     if received == expected:
         return dspy.Prediction(score=1.0, feedback="SQL correto e com o resultado esperado.")

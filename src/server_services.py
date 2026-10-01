@@ -1,5 +1,4 @@
 import os
-import re
 import sqlite3
 
 from fastapi import FastAPI
@@ -41,13 +40,8 @@ def create_validation_db(include_products=False):
 
 def validate_sql(sql_query):
     sql_query = sql_query.strip()
-    is_select = sql_query.upper().startswith("SELECT")
-    is_product_insert = re.match(r"^INSERT\s+INTO\s+produtos\b", sql_query, re.IGNORECASE)
-
-    if not (is_select or is_product_insert):
-        return False, "Operação negada: apenas SELECT ou INSERT na tabela produtos são permitidos."
-    if ";" in sql_query[:-1]:
-        return False, "Operação negada: múltiplas instruções não são permitidas."
+    if not sql_query.upper().startswith("SELECT"):
+        return False, "Operação negada: apenas consultas SELECT são permitidas."
 
     try:
         conn = create_validation_db()
@@ -61,9 +55,7 @@ def validate_sql(sql_query):
 def execute_sql(sql_query):
     try:
         conn = sqlite3.connect(DB_PATH)
-        cursor = conn.execute(sql_query)
-        results = cursor.fetchall() if sql_query.upper().startswith("SELECT") else []
-        conn.commit()
+        results = conn.execute(sql_query).fetchall()
         conn.close()
         return {"success": True, "error": None, "results": results}
     except sqlite3.Error as error:
@@ -87,12 +79,8 @@ def query_database(question):
 
     results = execution["results"]
 
-    if generated["sql_query"].upper().startswith("SELECT") and not results:
+    if not results:
         return {"success": False, "error": "Nenhum produto encontrado.", "results": []}
-
-    if generated["sql_query"].upper().startswith("INSERT"):
-        return {"success": True, "error": None, "results": [], "message": "Produto adicionado com sucesso."}
-
     return {"success": True, "error": None, "results": results}
 
 
