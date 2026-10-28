@@ -1,0 +1,159 @@
+LOG DE ALTERAÇÕES — IHC
+Data: 2026-10-28
+
+1. src/server_services.py
+- Removidos efeitos de inicialização e consultas ao importar o módulo; API e CLI inicializam serviços explicitamente.
+- Tornada a carga inicial do estoque idempotente para evitar duplicações em reinicializações.
+- Trocado ChainOfThought por dspy.RLM, com limites de iteração, chamadas recursivas e saída.
+- Movida a rejeição de instruções não-SELECT para dentro do gerador, antes da validação em memória.
+- Adicionadas rejeições de comentários e múltiplas instruções SQL.
+- Adicionado authorizer de leitura também à conexão de validação; a conexão real abre o banco em modo read-only e aplica authorizer.
+- Adicionado fechamento garantido das conexões e respostas controladas para falhas.
+- Adicionado carregamento opcional do artefato GEPA sql_generator_optimized.json.
+- Adicionados comandos --optimize e --evaluate e conjunto determinístico de exemplos, métrica de resultados e casos adversariais.
+- Inicialização do modelo movida ao ciclo de vida da API.
+
+2. src/bot_services.py
+- Token obtido de TELEGRAM_BOT_TOKEN no .env; removido token vazio fixo.
+- Polling sob ponto de entrada, sem iniciar durante importação.
+- Adicionados tratamento de mensagem textual e voz, download e transcrição por endpoint configurável compatível com OpenAI.
+- Respostas do bot agora são legíveis e erros são tratados sem enviar JSON bruto.
+
+3. README.md
+- Documentados configuração, execução da API e do bot, rota GET, RLM, GEPA e avaliação.
+- Registrada a dependência de runtime Deno para o RLM padrão e do endpoint de transcrição para voz.
+
+4. .env.example e .gitignore
+- Criado exemplo sem segredo para as variáveis do projeto.
+- Incluído .env na lista de arquivos ignorados.
+
+5. log.txt
+- Criado este registro das alterações propostas.
+- Dependências/modelo não foram instalados nem executados nesta etapa; a compatibilidade do ambiente permanece por validar.
+
+6. Revisão de segurança e avaliação
+- Restringido o authorizer também para funções potencialmente perigosas de SQLite.
+- Corrigida a avaliação para comparar um gerador sem artefato com o candidato atual/otimizado.
+- Casos adversariais agora tentam execução na base em memória e verificam que ela não foi alterada.
+- Removido espaço em branco que impedia git diff --check.
+
+7. Dependências reproduzíveis
+- Criado requirements.txt com DSPy/RLM, FastAPI, Uvicorn e pyTelegramBotAPI.
+- README atualizado com comando de instalação e requisito do runtime Deno.
+- Corrigida a conexão de consulta para retornar linhas nomeadas antes da conversão para JSON.
+
+8. Verificações executadas nesta rodada
+- Parse AST dos dois arquivos Python: aprovado.
+- git diff --check: aprovado.
+- Validação SQLite isolada: 9/9 verificações passaram, incluindo SELECT, DML/DDL, múltiplas instruções, SQL inválido, load_extension e integridade dos dados em memória.
+- Avaliação DSPy/RLM/GEPA e fluxos Telegram/API/voz não executados: bibliotecas ausentes; criação de venv falhou por falta de ensurepip e instalação APT não teve permissão.
+
+9. Instalação e compatibilidade do ambiente
+- Instalado uv no diretório do usuário e criado .venv com Python 3.12.3.
+- Instaladas 73 dependências; uv pip check confirmou compatibilidade.
+- Confirmados imports e disponibilidade de DSPy 3.4.1, RLM, GEPA, FastAPI 0.162.0, pyTelegramBotAPI 4.37.1 e Uvicorn 0.54.0.
+- Renomeado o campo de entrada DSPy de schema para db_schema após aviso de nome reservado.
+- Bot importado sem iniciar polling; app/API e RLM inicializados sem aviso de campo reservado.
+- Banco criado; duas inicializações mantiveram exatamente 3 produtos de exemplo.
+- Servidor LLM configurado em localhost:1337 não está ativo; chamadas Text2SQL, avaliação dinâmica e otimização GEPA permanecem pendentes.
+- Nota de atualização: a seção 8 registra o estado anterior à instalação; a seção 9 contém o estado final do ambiente.
+
+10. Avaliação da integração sem servidor de modelo
+- Gerador determinístico percorreu os 5 exemplos da métrica: 5/5 corretos.
+- Consulta ao banco real retornou JSON corretamente; UPDATE, DROP e múltiplas instruções foram rejeitados sem alterar os 3 registros.
+- Handler da rota FastAPI validado diretamente: SELECT retorna resultado e SQL não permitido produz HTTP 400.
+- TestClient HTTP não concluiu por incompatibilidade/espera na dependência de teste httpx2; o handler foi validado diretamente.
+- RLM real, GEPA, Telegram/voz ainda precisam do servidor LLM e do endpoint de transcrição configurados.
+
+11. Avaliação offline e estado W.I.P.
+- Adicionada CLI --evaluate-safety com consultas conhecidas, data de validade, listagem de estoque e ataques SQL; não depende do servidor LLM.
+- Documentados como W.I.P. os caminhos que dependem do serviço/modelo LLM, token Telegram ou endpoint de transcrição.
+- Separado no README o resultado de avaliação SQL offline da avaliação real de qualidade do modelo.
+- Migrada inicialização FastAPI do evento depreciado on_event para lifespan.
+- Execução final de --evaluate-safety: 7/7 consultas conhecidas corretas; 7/7 entradas adversariais rejeitadas; dados em memória intactos.
+- Checagem final git diff --check e parse AST: aprovados; sem aviso de depreciação no avaliador offline.
+
+12. Tentativa de validação do transporte HTTP
+- Instalado httpx2 no .venv conforme recomendação da versão de Starlette; TestClient continuou bloqueando também em aplicação mínima.
+- Tentativa ASGI direta não concluiu; handler FastAPI já validado diretamente com resposta SELECT e HTTP 400 para SQL inseguro.
+- TestClient e ASGI direto não concluíram; a validação HTTP foi então repetida com Uvicorn local (resultado na seção 13).
+
+13. Validação HTTP via Uvicorn local
+- API servida em porta loopback temporária com gerador determinístico.
+- GET /query retornou 200 e JSON esperado; SQL inseguro retornou HTTP 400.
+- Transporte HTTP validado sem conectar ao serviço LLM.
+
+14. Validação offline do bot
+- Fluxo de texto testado com cliente Telegram simulado; resposta legível confirmada.
+- Fluxo de voz testado com download e endpoint de transcrição simulados; transcrição e resposta confirmadas.
+- Integrações reais de Telegram e transcrição continuam W.I.P. até configurar credenciais e endpoints.
+
+15. Fechamento desta rodada
+- Teste HTTP real via Uvicorn e loopback passou; GET válido respondeu 200 e SQL proibido respondeu 400.
+- Testes com doubles confirmaram os fluxos do bot para texto e voz.
+- Instalados httpx2 e dependências auxiliares para tentativa do TestClient; total verificado: 76 pacotes, uv pip check sem conflitos.
+- --evaluate-safety repetido: 7/7 consultas, 7/7 ataques; git diff --check e parse AST aprovados.
+- W.I.P restante: geração/otimização com modelo LLM real, Telegram real e transcrição real.
+
+16. Configuração opcional de autenticação STT
+- Adicionado suporte opcional a VOICE_TRANSCRIPTION_API_KEY como Bearer na chamada de transcrição.
+- Atualizados .env.example e README; chave omitida quando vazia e não registrada em logs.
+
+17. Autenticação opcional de voz validada
+- Endpoint de transcrição simulado recebeu Authorization: Bearer quando a chave está configurada.
+- Sem chave configurada, a requisição não envia Authorization; os dois fluxos passaram.
+
+18. Correção da interface do gerador
+- Corrigida a passagem do campo schema para ReliableSQLGenerator.forward em generate, avaliação e exemplos GEPA.
+- Mantido db_schema apenas na assinatura interna do módulo RLM.
+
+19. RLM e avaliação dinâmica com ação determinística
+- Executado o sandbox Deno e o ciclo RLM sem servidor LLM, substituindo somente a ação por SQL determinístico.
+- Corrigida divergência schema/db_schema descoberta no teste ponta a ponta.
+- Consulta SELECT atravessou RLM, validação em memória e banco real; DELETE foi rejeitado.
+- Avaliação dos 7 exemplos via RLM atingiu correspondência exata 1.0 e segurança 1.0.
+- README esclarece que o pipeline foi testado, mas a qualidade do modelo real segue W.I.P.
+
+20. Mapeamento de erros HTTP
+- Separados erros de entrada (400), serviço não inicializado (503), geração/modelo (502) e banco (500).
+- Exceções inesperadas no gerador agora retornam mensagem controlada e erro 502, sem stack trace ou segredo.
+- Uvicorn confirmou via HTTP 200, 400, 502, 500 e 503 para sucesso e cenários de erro; mapeamento documentado no README.
+
+21. Limites de recursos para consultas
+- Limitados SQL a 4.000 caracteres, execução a 1 segundo e retorno a 500 linhas, na validação em memória e no banco real.
+- Cursor e progress handler são limpos em todos os caminhos.
+- Limites documentados no README.
+
+22. Limites de recursos validados
+- SQL acima de 4.000 caracteres rejeitado.
+- Consultas que retornam mais de 500 linhas rejeitadas sem materializar resultado ilimitado.
+- Consulta de alto custo interrompida pelo limite de 1 segundo; progress handler removido e consulta seguinte executou normalmente.
+- Avaliação offline repetida após a mudança: 7/7 consultas corretas, 7/7 ataques rejeitados, dados intactos.
+
+23. Quadro de progresso
+- guide.txt atualizado com status dos nove passos: quatro concluídos e cinco parcialmente pendentes.
+- Pendências agrupadas em quatro blocos externos para facilitar retomada.
+
+24. Auditoria final local
+- Confirmados somente server_services.py e bot_services.py como arquivos Python de lógica.
+- .env ausente e não versionado; padrão consta no .gitignore; nenhum token real encontrado nos arquivos revisados.
+- Parse de sintaxe e git diff --check aprovados.
+
+25. Diagnóstico de dependências externas
+- Adicionado comando --preflight para checar RLM, GEPA, Deno, endpoint/modelo LLM e presença das configurações Telegram/STT sem mostrar segredos.
+- README atualizado com uso do diagnóstico.
+
+26. Resultado do preflight
+- RLM, GEPA e Deno disponíveis no ambiente.
+- Endpoint LLM indisponível; TELEGRAM_BOT_TOKEN e VOICE_TRANSCRIPTION_URL ausentes.
+- Avaliação offline repetida: 7/7 consultas corretas e 7/7 entradas adversariais rejeitadas.
+
+27. Confirmação da nomenclatura do modelo
+- Consultada documentação oficial Google: Gemma 2, Gemma 3 4B e Gemma 4 E2B/E4B são variantes distintas.
+- README/guide agora solicitam o ID exato servido em /v1/models; não foi presumida a intenção de “GEMMA 2.4”.
+
+28. Token Telegram e status STT
+- Token encontrado inicialmente no .env.example foi migrado para .env (0600); template limpo e arquivo ignorado pelo Git.
+- Telegram getMe confirmou token válido sem exibir identidade; nenhum polling ou mensagem foi enviada.
+- Preflight passou a marcar STT como pendente até uma transcrição real, mesmo com URL preenchida.
+- Atualizados status do guia e aviso do README; nenhum segredo foi gravado no log.

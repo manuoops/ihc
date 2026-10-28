@@ -1,0 +1,61 @@
+--> Bot telegram
+--> GEPA (treino I.A) - Otimização da IA
+--> Consulta direta em um banco de dados
+--> FastAPI para deixar mais eficaz e nõa precisar só usar no telegram, e criação de ROTAS
+--> Modelo da I.A: GEMMA 2.4 ...
+
+CONSTRAINT:
+
+Clean code de fácil legibilidade
+Separação da lógica em apenas dois arquivos Distintos (server_services.py + bot_services.py)
+Uso do .env para setar a TOKEN do TELEGRAM BOT
+Criação de um .db (que provavelmente é não-relacional)
+Asegurar que só tenha SELECT na Query (PROIBIÇÃO PARA QUALQUER OUTRO)
+
+# IHC
+## Bot de Estoque Inteligente 🤖
+
+Agente conversacional integrado ao **Telegram**, com suporte a **voz**, que traduz perguntas em linguagem natural para consultas **SQL** utilizando **Chain-of-Thought (CoT)**, consultando um banco de dados de estoque através de uma API própria.
+
+---
+
+## 📌 Descrição
+
+Este projeto implementa um pipeline completo de **Text2SQL**, permitindo que o usuário faça perguntas em linguagem natural (via texto ou voz) e receba respostas baseadas em dados reais de um banco de estoque, sem precisar escrever SQL manualmente.
+
+## LÓGICA DE ESTRUTURA EXEMPLO:
+
+bot.py
+        Contains the Telegram bot logic
+        Loads a local LLM via DSPy
+        Defines the SQL-generation pipeline and safety checks
+        Includes a GEPA training setup for improving SQL generation quality
+        Handles both text and voice messages
+    server.py
+        Starts a FastAPI app
+        Creates the SQLite database if needed
+        Exposes an endpoint at / that accepts a question and calls the bot logic
+    sql_generator_optimized.json
+        Saved trained DSPy model artifact used to generate better SQL prompts
+    lojas.db
+        Runtime database with product inventory data, with fields like produto, preco, departamento, data_fabricacao, and data_validade
+
+TEXTO DO PROFESSOR
+
+Estou passando um agente que implementei completo text2sql integrado com telegram, voz, BD, CoT etc etc... vocês precisam:
+ 
+1 encapsular o BD, expor ele usando fastAPI com uma rota get e deixá-lo mais complexo (Estoque: produto, departamento, id, data fabri, data venci...)
+ 
+2 colocar try catch no próprio gerador e conferir o sql gerado em um sqlite in memory para pegar exceptions
+ 
+3 colocar checagem de execução apenas de select no próprio gerador
+ 
+4 otimizar um programa (usando gepa por exemplo)
+ 
+5 arrumar o código deixando tudo encapsulado
+ 
+6 avaliar resultados
+ 
+---- até início de setembro ---
+ 
+7 usar RLM ao invés de CoT para que libs python recursivamente gerem sql bons

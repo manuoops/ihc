@@ -1,0 +1,107 @@
+GUIA DE IMPLEMENTAÇÃO — BOT DE ESTOQUE IHC
+
+Objetivo
+Melhorar o projeto existente seguindo os requisitos em src/robot.txt e os itens do professor. Antes de alterar qualquer coisa, ler novamente src/robot.txt, README.md e os dois arquivos de código. Preservar alterações existentes do usuário.
+
+CONSTRAINTS OBRIGATÓRIOS
+1. Manter a lógica da aplicação organizada em somente dois arquivos Python: src/server_services.py e src/bot_services.py. Não criar módulos Python adicionais para lógica. Arquivos de configuração, documentação, banco SQLite e artefatos de treino/avaliação são permitidos.
+2. Usar .env para o token do Telegram. Não incluir token real no código, logs, commits ou documentação. Incluir um .env.example sem segredo e garantir que .env esteja ignorado pelo Git.
+3. Usar SQLite conforme pedido explícito do professor. Criar/garantir a tabela de estoque com produto, departamento, id, data_fabri, data_venc, custos e fornecedor.
+4. Consultas geradas pelo modelo só podem ser SELECT. Rejeitar qualquer outra instrução antes de validá-la ou executá-la. Aplicar também proteção read-only no SQLite real; a validação textual não é a única barreira.
+5. Manter código legível, funções com responsabilidade clara, erros tratados e recursos (conexões) sempre fechados.
+6. A implementação solicitada mais recente do professor pede RLM no lugar de CoT. Remover ChainOfThought do caminho de geração e usar a abordagem RLM compatível com as dependências e o runtime do projeto. Não declarar RLM implementado se houver apenas uma chamada comum ao modelo.
+7. Usar GEPA para otimizar o programa de geração Text2SQL, quando suportado pela versão de DSPy/dependências do projeto. Salvar o artefato otimizado e documentar como carregá-lo. Não confundir o otimizador GEPA com RLM: são requisitos distintos.
+
+PASSO A PASSO
+
+1. Levantamento e preservação
+- Ler os requisitos atualizados, README, código e configuração/dependências existentes.
+- Conferir o estado do Git e não sobrescrever alterações do usuário.
+- Mapear os fluxos atuais: inicialização, bot, API, geração, validação e execução SQL.
+- Confirmar o nome e a disponibilidade do modelo local configurado; registrar configuração em variáveis de ambiente quando aplicável. Não presumir que “Gemma 2.4” identifica um modelo executável sem conferir o runtime.
+
+2. Banco de dados
+- Manter SQLite em arquivo e definir esquema coerente com o estoque pedido.
+- Criar tabela sem destruir dados existentes.
+- Tornar a carga de dados de exemplo idempotente: inicializações repetidas não podem duplicar registros.
+- Usar context managers ou try/finally para fechar conexões e transações corretamente.
+- Criar banco de validação separado em SQLite :memory: com o mesmo esquema necessário, sem copiar dados reais.
+
+3. Segurança do SQL — dentro do gerador
+- Gerar uma única instrução SQL para a pergunta.
+- Rejeitar valor vazio, comentários/instruções extras e qualquer comando cujo tipo não seja SELECT antes de executar a consulta na base em memória.
+- A checagem deve aceitar SELECT em qualquer combinação de maiúsculas/minúsculas, mas não aceitar WITH ou outros comandos, salvo se o professor autorizar explicitamente ampliar a regra para consultas SELECT iniciadas por CTE.
+- Executar a instrução aceita no SQLite :memory: para detectar erros de sintaxe e referências inválidas; sempre fechar essa conexão, inclusive em caso de exceção.
+- Capturar erros da geração, da validação em memória e da execução real e retornar mensagens controladas, sem expor segredos ou stack traces ao usuário.
+- Na base real, usar conexão somente leitura quando possível e authorizer que permita apenas leitura/SELECT. Fechar a conexão em todos os caminhos.
+- Não confiar apenas em regex: a autorização do SQLite é a barreira final contra escrita.
+
+4. API FastAPI
+- Expor rota GET para pergunta de estoque, com parâmetro validado e resposta JSON consistente.
+- Encapsular a chamada ao serviço de geração/consulta; não duplicar lógica SQL na rota.
+- Inicializar modelo e recursos de forma controlada no ciclo de vida da aplicação, evitando falha inesperada durante importação do módulo.
+- Retornar erros HTTP apropriados para entrada inválida, falha do modelo e erro interno, sem revelar detalhes sensíveis.
+- Documentar exemplo de chamada da rota.
+
+5. Bot Telegram
+- Obter TELEGRAM_BOT_TOKEN do .env via variável de ambiente; falhar com mensagem clara se estiver ausente.
+- Colocar o polling sob ponto de entrada explícito, sem iniciar bot, consulta de exemplo ou impressão de dados ao importar o arquivo.
+- Tratar texto e voz. Para voz, baixar o arquivo pelo Telegram e transcrever usando mecanismo disponível/configurado; lidar com falha de download ou transcrição.
+- Enviar resposta legível ao usuário em vez de serializar o dicionário Python como JSON bruto.
+- Tratar mensagens vazias e exceções sem derrubar o processo.
+
+6. RLM e GEPA
+- Implementar o caminho de geração usando RLM no lugar de CoT, com dependências e chamadas compatíveis com a versão instalada.
+- Configurar GEPA para otimizar o programa/prompt de Text2SQL usando exemplos representativos e uma métrica explícita de qualidade e segurança.
+- Garantir que exemplos de treino/otimização nunca autorizem comandos diferentes de SELECT.
+- Persistir o artefato otimizado em arquivo versionável apropriado; não salvar credenciais nem dados sensíveis nele.
+- Permitir fallback claro ou erro claro quando artefato/modelo/dependência não estiver disponível; não alegar otimização executada sem evidência.
+
+7. Avaliação
+- Criar conjunto pequeno e representativo de perguntas e resultados esperados, cobrindo produto, departamento, datas, custo, fornecedor, ausência de resultados e perguntas ambíguas.
+- Medir pelo menos: execução bem-sucedida, correspondência do resultado esperado e taxa de rejeição de SQL inseguro/inválido.
+- Incluir casos adversariais tentando INSERT, UPDATE, DELETE, DROP, múltiplas instruções e SQL inválido; comprovar que nenhum altera o banco.
+- Comparar o gerador antes/depois da otimização GEPA quando houver baseline disponível.
+- Registrar limitações e resultados de forma reproduzível, sem inventar métricas.
+
+8. Organização e documentação
+- Toda lógica Python permanece em server_services.py e bot_services.py; não espalhar implementação por novos arquivos Python.
+- Atualizar README com instalação, dependências, configuração do .env, inicialização da API e do bot, suporte a voz, modelo/RLM, GEPA, artefato e avaliação.
+- Revisar comentários e remover consultas de demonstração e efeitos colaterais de importação.
+
+9. Verificação final
+- Conferir que a árvore contém apenas os dois arquivos Python de lógica definidos nos constraints.
+- Conferir que .env não está rastreado e que o token não aparece em código ou logs.
+- Conferir que a inicialização repetida não duplica registros.
+- Conferir rota GET, bot de texto e fluxo de voz no ambiente disponível.
+- Conferir rejeição de SQL não-SELECT antes da validação em memória e bloqueio de escrita também no banco real.
+- Conferir que falhas sempre fecham conexões e retornam respostas controladas.
+- Executar a avaliação e registrar o que foi realmente verificado e o que depende de serviços externos.
+- Ao concluir, resumir arquivos alterados, critérios atendidos e limitações restantes.
+
+CRITÉRIO DE CONCLUSÃO
+Só considerar pronto quando os constraints obrigatórios estiverem atendidos, os itens do professor estiverem implementados ou explicitamente identificados como bloqueados por dependência/runtime, e os critérios de segurança e avaliação tiverem evidência. Nunca afirmar suporte a voz, RLM, GEPA ou avaliação apenas por constarem na documentação.
+
+
+STATUS DE EXECUÇÃO — ATUALIZADO EM 2026-10-28
+
+Passo 1 — Levantamento e preservação: 🟡 Código e requisitos conferidos; endpoint LLM está indisponível. “GEMMA 2.4” é ambíguo; exigir o ID servido pelo runtime antes de escolher.
+Passo 2 — Banco de dados: 🟢 SQLite, esquema, carga idempotente e fechamento de recursos implementados e verificados.
+Passo 3 — Segurança SQL: 🟢 Validação no gerador, SQLite em memória, authorizer read-only, limites e casos adversariais verificados.
+Passo 4 — API FastAPI: 🟢 Rota GET, inicialização lifespan, respostas HTTP e erros validados via Uvicorn com gerador determinístico.
+Passo 5 — Bot Telegram: 🟡 Token migrado para .env e validado via getMe; falta validar chat real e endpoint STT.
+Passo 6 — RLM e GEPA: 🟡 RLM/Deno validado com ações determinísticas; falta executar inferência com o modelo escolhido, GEPA e salvar o artefato otimizado.
+Passo 7 — Avaliação: 🟡 Avaliação offline 7/7 e dinâmica determinística 7/7 concluídas; faltam resultados do modelo real e comparação antes/depois GEPA.
+Passo 8 — Organização e documentação: 🟢 Dois arquivos Python de lógica, README, requirements, .env.example e log atualizados.
+Passo 9 — Verificação final: 🟡 Sintaxe, diff, segurança, banco, rota e fluxos simulados verificados; integrações reais permanecem pendentes.
+
+CONTAGEM
+Nota do modelo: a nomenclatura oficial distingue Gemma 2, Gemma 3 4B e Gemma 4 E2B/E4B; confirmar o ID exato no endpoint /v1/models. Referências no README.
+Resultado mais recente de --preflight: DSPy/RLM, GEPA e Deno disponíveis; endpoint LLM indisponível; token Telegram configurado/validado; URL STT presente, mas serviço não validado. Nenhum valor de segredo foi impresso.
+4 de 9 passos estão integralmente concluídos. 5 de 9 possuem itens W.I.P. Esses itens se agrupam em quatro blocos para conclusão:
+1. Confirmar o identificador Gemma e disponibilizar o endpoint LLM.
+2. Executar RLM com o modelo real, rodar GEPA, salvar o artefato e comparar os resultados.
+3. Validar Telegram com token real e transcrição com endpoint/chave reais.
+4. Repetir a avaliação final ponta a ponta com os serviços configurados.
+
+Não marcar os itens W.I.P. como concluídos sem executar e registrar evidências reais.

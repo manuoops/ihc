@@ -1,0 +1,27 @@
+PROMPT PARA CONCLUIR AS PENDÊNCIAS DO PROJETO IHC
+
+Continue o projeto em /home/heitor/ihc. Leia src/robot.txt, guide.txt, README.md e log.txt antes de alterar arquivos. Preserve o trabalho existente e mantenha a lógica Python somente em src/server_services.py e src/bot_services.py.
+
+ESTADO ATUAL
+- O ambiente .venv está instalado; uv pip check passou.
+- O token do Telegram foi movido de .env.example para .env, com permissão 0600. O exemplo foi limpo, .env está ignorado pelo Git e o token passou no getMe. Nunca imprima ou registre o token.
+- O loop RLM/Deno, a validação SQLite, o fluxo HTTP com Uvicorn e os fluxos simulados de texto/voz foram verificados.
+- --evaluate-safety passou: 7/7 consultas conhecidas e 7/7 entradas adversariais rejeitadas.
+- O servidor LLM em http://localhost:1337/v1 não está ativo. O ID “GEMMA 2.4” é ambíguo; não escolha um modelo sem confirmar o ID servido em /v1/models.
+- A URL STT está preenchida com um valor de exemplo, mas o serviço real ainda não foi validado.
+- guide.txt registra 4 passos integralmente concluídos e 5 com pendências W.I.P.
+
+TRABALHO
+1. Rode .venv/bin/python src/server_services.py --preflight. Confirme endpoint, modelo servido, configuração Telegram e STT sem expor segredos.
+2. Avance tudo que puder sem serviços externos. Não simule uma execução real de RLM/GEPA como se tivesse usado o modelo.
+3. Quando o LLM estiver disponível, confirme o ID exato pelo endpoint /v1/models. Execute --evaluate antes da otimização, depois --optimize, confirme que o artefato foi salvo e carregado, e execute a avaliação novamente. Registre métricas reais de baseline e modelo otimizado.
+4. Valide Telegram e transcrição com serviços reais quando disponíveis. O token já foi validado. Não envie mensagens a terceiros; para teste que produza mensagens, use somente uma conversa de teste autorizada.
+5. Valide a API ponta a ponta, a avaliação de segurança, a inicialização idempotente do banco e a ausência de regressões.
+6. Atualize log.txt e os status de guide.txt após cada etapa. Marque cada passo com 🟢 concluído, 🟡 parcial/W.I.P. ou 🔴 não concluído. Nunca marque dependências externas como concluídas sem evidência.
+
+DEPENDÊNCIAS QUE PRECISAM SER INFORMADAS SE CONTINUAREM AUSENTES
+- URL base do servidor LLM e ID exato do modelo.
+- URL do serviço de transcrição; chave local em .env somente se o provedor exigir.
+- Uma conversa de teste autorizada para validar respostas reais do bot.
+
+No final, informe quantos dos 9 passos estão completos e quais ainda dependem de serviço ou informação externa.
