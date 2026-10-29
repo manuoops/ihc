@@ -157,3 +157,42 @@ Data: 2026-10-28
 - Telegram getMe confirmou token válido sem exibir identidade; nenhum polling ou mensagem foi enviada.
 - Preflight passou a marcar STT como pendente até uma transcrição real, mesmo com URL preenchida.
 - Atualizados status do guia e aviso do README; nenhum segredo foi gravado no log.
+
+29. Reteste com Jan AI
+- Preflight confirmou o endpoint Jan em localhost e o ID servido `gemma-4-E2B-it-IQ4_XS`; chamada direta de conclusão do modelo respondeu.
+- Avaliação offline repetida: 7/7 consultas conhecidas corretas, 7/7 entradas adversariais rejeitadas e banco de validação intacto.
+- A primeira execução de `--evaluate` (antes de instalar Deno) tentou os sete casos, mas as chamadas RLM falharam com `CodeInterpreterError`. Os zeros não são uma avaliação válida da qualidade do modelo.
+- Token Telegram e URL STT estão configurados conforme o preflight atual. Nenhuma mensagem foi enviada; a transcrição real continua pendente.
+- Um teste com cliente HTTP simulado confirmou que o cabeçalho Bearer da transcrição funciona sem enviar chave a um serviço externo.
+- Deno 2.9.8 instalado via winget; preflight confirmou Deno, Jan e modelo disponíveis. O executável foi usado por caminho direto nesta sessão, pois o PATH atual não foi atualizado.
+- Nova execução de `--evaluate` ficou sem saída por vários minutos e foi interrompida; RLM/GEPA e comparação antes/depois seguem sem resultado real.
+- O preflight agora procura Deno no PATH do sistema; os resultados dinâmicos expõem falhas de geração para distingui-las de SQL inseguro/incorreto.
+
+30. RLM e API ponta a ponta com Jan
+- Com Deno 2.9.8 incluído no PATH do processo, RLM gerou e validou `SELECT departamento FROM produtos WHERE produto = 'sabonete';`.
+- Uvicorn local serviu a aplicação; GET `/query?question=...sabonete` retornou HTTP 200 e `departamento: higiene` via Jan/RLM e SQLite.
+- `getMe` do Telegram confirmou o token sem expor identidade e sem enviar mensagens.
+- A lista `/v1/models` do Jan contém Gemma e sentence-transformer-mini, mas não `whisper-1`; STT real segue dependente de endpoint/modelo de transcrição compatível.
+- A avaliação dinâmica completa anterior demorou vários minutos; após interrupção, uma chamada RLM com uma iteração também excedeu 90 segundos. Uma consulta simples e o GET HTTP real passaram. Baseline completo, GEPA e avaliação comparativa não foram concluídos.
+- Nenhuma mensagem foi enviada e nenhum áudio real foi submetido.
+
+31. Retomada e diagnóstico do ambiente de execução (2026-10-29)
+- Releitura de src/robot.txt, guide.txt, README.md, log.txt e dos dois serviços concluída; alterações locais preexistentes em README.md, guide.txt, log.txt, prompt.txt e src/server_services.py foram preservadas.
+- A tentativa de executar `src/server_services.py --preflight` não iniciou: `python` não estava disponível no PATH e o `.venv` documentado não estava presente.
+- O único interpretador Python acessível no contexto era embarcado por outro aplicativo (3.12.14), sem o pacote `dspy`; portanto ele não é um ambiente válido para o projeto.
+- Não foram executados `--evaluate`, `--optimize`, testes de STT ou polling/mensagens Telegram. Não foram registrados resultados de qualidade, artefatos GEPA ou métricas artificiais.
+- Próxima ação necessária: disponibilizar/restaurar o ambiente Python com as dependências de requirements.txt e Deno, então repetir o preflight antes das avaliações reais.
+
+32. Criação do ambiente e tentativa de instalar dependências (2026-10-29)
+- Criado `.venv` local com Python 3.12.14 a partir de um interpretador embarcado externo; pip 25.0.1 disponível no ambiente isolado.
+- A instalação de `requirements.txt` não pôde baixar `dspy`: o acesso ao PyPI foi bloqueado com `WinError 10013`. Não houve pacotes correspondentes no cache local do pip.
+- Nenhum segredo foi exibido. Posteriormente, a saída do terminal do usuário indicou que as dependências foram resolvidas nesse `.venv`; ainda assim, o ambiente permanece inválido por falhar ao importar SQLite e o preflight continua pendente.
+
+33. Correção necessária do ambiente virtual (2026-10-29)
+- Confirmado que `.venv/pyvenv.cfg` aponta para um interpretador embarcado externo. Esse ambiente falha ao carregar o módulo `_sqlite3` e não deve ser usado pelo projeto.
+- A lógica do projeto não tem dependência desse software externo. A correção é remover `.venv`, instalar/usar Python padrão 3.12 ou 3.13, recriar o ambiente e reinstalar requirements.txt.
+
+34. Diagnóstico do sandbox RLM (2026-10-29)
+- Adicionada ao preflight uma execução mínima do `PythonInterpreter` do DSPy. Ela testa diretamente o sandbox Deno/Pyodide sem enviar pergunta ao Jan e registra apenas disponibilidade, tipo de erro e orientação não secreta.
+- `CodeInterpreterError` agora retorna mensagem específica para o sandbox RLM, em vez de ser confundido com falha da geração SQL ou do SQLite.
+- Não foi adotado `LocalInterpreter`: código gerado pelo modelo continuaria sem isolamento e poderia acessar arquivos, ambiente e rede do usuário.

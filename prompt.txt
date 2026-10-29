@@ -1,27 +1,29 @@
-PROMPT PARA CONCLUIR AS PENDÊNCIAS DO PROJETO IHC
+PROMPT PARA RETOMAR E CONCLUIR AS PENDÊNCIAS DO PROJETO IHC
 
-Continue o projeto em /home/heitor/ihc. Leia src/robot.txt, guide.txt, README.md e log.txt antes de alterar arquivos. Preserve o trabalho existente e mantenha a lógica Python somente em src/server_services.py e src/bot_services.py.
+Trabalhe a partir da raiz do repositório, sem presumir um caminho específico de sistema operacional. Antes de alterar arquivos, leia src/robot.txt, guide.txt, README.md, log.txt e os arquivos src/server_services.py e src/bot_services.py. Preserve alterações existentes. A lógica da aplicação deve permanecer somente nos dois arquivos Python existentes.
 
-ESTADO ATUAL
-- O ambiente .venv está instalado; uv pip check passou.
-- O token do Telegram foi movido de .env.example para .env, com permissão 0600. O exemplo foi limpo, .env está ignorado pelo Git e o token passou no getMe. Nunca imprima ou registre o token.
-- O loop RLM/Deno, a validação SQLite, o fluxo HTTP com Uvicorn e os fluxos simulados de texto/voz foram verificados.
-- --evaluate-safety passou: 7/7 consultas conhecidas e 7/7 entradas adversariais rejeitadas.
-- O servidor LLM em http://localhost:1337/v1 não está ativo. O ID “GEMMA 2.4” é ambíguo; não escolha um modelo sem confirmar o ID servido em /v1/models.
-- A URL STT está preenchida com um valor de exemplo, mas o serviço real ainda não foi validado.
-- guide.txt registra 4 passos integralmente concluídos e 5 com pendências W.I.P.
+ESTADO REGISTRADO MAIS RECENTE — 2026-10-29
+- Na retomada mais recente, o `.venv` foi criado com um interpretador embarcado externo e falha ao importar SQLite. Remova-o e recrie-o com uma instalação padrão do Python 3.12 ou 3.13; instale `requirements.txt` antes de repetir `--preflight`, `--evaluate` e `--optimize`. Não substitua a evidência anterior por métricas vazias.
+- O projeto tem 9 passos de implementação: 5 concluídos e 4 parciais/W.I.P. Consulte os status detalhados no fim de guide.txt e atualize-os conforme novas evidências.
+- Banco SQLite, carga idempotente, proteção contra SQL não-SELECT, avaliação em memória, authorizer read-only, limites de recursos, API HTTP via Uvicorn e fluxos simulados de texto/voz foram verificados.
+- A avaliação offline mais recente registrou 7/7 consultas conhecidas corretas, 7/7 entradas adversariais rejeitadas e banco de validação intacto.
+- O endpoint Jan respondeu e `/v1/models` serviu o ID `gemma-4-E2B-it-IQ4_XS`; uma chamada direta ao modelo também respondeu. Não trate “GEMMA 2.4” como identificador de modelo.
+- DSPy/RLM, GEPA e Deno 2.9.8 foram detectados no preflight. Uma pergunta real atravessou RLM, Jan, SQLite e a rota HTTP, retornando o departamento esperado do sabonete.
+- A avaliação completa `--evaluate` ficou sem saída por vários minutos; houve aviso de limite de iterações do RLM. Portanto, as métricas baseline completas, GEPA e comparação antes/depois ainda não estão demonstradas.
+- O token Telegram consta como configurado e sua validade foi confirmada por `getMe`; nenhum polling ou mensagem foi enviado. A URL STT consta como configurada, mas o modelo `whisper-1` não aparece na lista `/v1/models` do Jan consultada; falta validar transcrição com serviço/modelo compatível e áudio de teste.
+- Os testes offline/simulados não substituem validações reais com Telegram ou serviço STT. Não imprima, registre nem copie tokens/chaves.
 
-TRABALHO
-1. Rode .venv/bin/python src/server_services.py --preflight. Confirme endpoint, modelo servido, configuração Telegram e STT sem expor segredos.
-2. Avance tudo que puder sem serviços externos. Não simule uma execução real de RLM/GEPA como se tivesse usado o modelo.
-3. Quando o LLM estiver disponível, confirme o ID exato pelo endpoint /v1/models. Execute --evaluate antes da otimização, depois --optimize, confirme que o artefato foi salvo e carregado, e execute a avaliação novamente. Registre métricas reais de baseline e modelo otimizado.
-4. Valide Telegram e transcrição com serviços reais quando disponíveis. O token já foi validado. Não envie mensagens a terceiros; para teste que produza mensagens, use somente uma conversa de teste autorizada.
-5. Valide a API ponta a ponta, a avaliação de segurança, a inicialização idempotente do banco e a ausência de regressões.
-6. Atualize log.txt e os status de guide.txt após cada etapa. Marque cada passo com 🟢 concluído, 🟡 parcial/W.I.P. ou 🔴 não concluído. Nunca marque dependências externas como concluídas sem evidência.
+PENDÊNCIAS — EXECUTAR NESTA ORDEM
+1. Releia os arquivos e confira o estado do Git. Não sobrescreva mudanças preexistentes.
+2. Execute `python src/server_services.py --preflight` no ambiente Python configurado. Registre somente resultados não secretos. Se os valores atuais divergirem do estado acima, atualize as pendências com base no resultado observado.
+3. Meça e reduza a latência do `--evaluate` com o RLM/modelo real sem simular inferência. A rota de caso único já funcionou, mas a avaliação ampla ficou lenta e atingiu o limite de iterações. Não considere zeros por falha de geração como métrica de qualidade.
+4. Quando o RLM real responder de forma confiável, execute `--evaluate` antes da otimização e registre métricas e falhas. Depois execute `--optimize`, confirme que `src/sql_generator_optimized.json` foi criado e carregado pelo fluxo da aplicação, e execute `--evaluate` novamente. Compare baseline e otimizado usando o mesmo conjunto de casos. Se não for possível concluir, registre evidências e motivo sem inventar resultados.
+5. Valide a transcrição com o endpoint e um áudio de teste reais. Valide o bot em uma conversa autorizada, sem enviar mensagens a terceiros. Se não houver conversa/áudio autorizados ou o serviço não estiver acessível, deixe o item pendente e informe exatamente o que falta.
+6. Repita as verificações finais pertinentes: avaliação offline de segurança, inicialização idempotente do banco, API HTTP e ausência de regressões. Reuse os comandos/testes existentes e não instale dependências sem necessidade.
+7. Atualize log.txt e os status/contagem de guide.txt com data, evidência observada e limitações. Mantenha este prompt alinhado com o estado novo. Use 🟢 concluído, 🟡 parcial/W.I.P. e 🔴 não concluído; nunca conclua uma integração externa apenas porque sua configuração está preenchida.
 
-DEPENDÊNCIAS QUE PRECISAM SER INFORMADAS SE CONTINUAREM AUSENTES
-- URL base do servidor LLM e ID exato do modelo.
-- URL do serviço de transcrição; chave local em .env somente se o provedor exigir.
-- Uma conversa de teste autorizada para validar respostas reais do bot.
-
-No final, informe quantos dos 9 passos estão completos e quais ainda dependem de serviço ou informação externa.
+CRITÉRIO PARA ENCERRAR
+- Os passos concluídos e parciais devem corresponder às evidências reais registradas.
+- Liste quantos dos 9 passos estão concluídos e quais seguem pendentes.
+- As pendências atuais prioritárias são: avaliação completa RLM, execução/validação da otimização GEPA e comparação antes/depois; transcrição STT real com modelo compatível; e teste do bot em conversa autorizada. A disponibilidade/configuração desses serviços deve ser reconfirmada pelo preflight e por testes reais.
+- Não revele segredos nem faça mudanças fora do escopo para tentar encerrar artificialmente as pendências.

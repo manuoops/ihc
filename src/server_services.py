@@ -2,9 +2,9 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sqlite3
 import time
-import sys
 from contextlib import asynccontextmanager, closing
 from pathlib import Path
 from urllib.parse import quote
@@ -38,6 +38,32 @@ SAMPLE_ROWS = [
     ("coca", "bebidas", 123, "2026-05-03", "2027-04-12", 7.00, "WOAH"),
 ]
 GENERATOR = None
+
+
+def rlm_runtime_diagnostics():
+    """Checks the sandbox required by RLM without sending a request to the LLM."""
+    if not hasattr(dspy, "RLM") or not hasattr(dspy, "PythonInterpreter"):
+        return {
+            "available": False,
+            "error_type": "MissingRLMRuntime",
+            "message": "A versão instalada do DSPy não oferece RLM/PythonInterpreter.",
+        }
+    try:
+        with dspy.PythonInterpreter() as interpreter:
+            output = str(interpreter("print('rlm-runtime-ok')"))
+        if "rlm-runtime-ok" not in output:
+            raise RuntimeError("O sandbox RLM não retornou a confirmação esperada.")
+    except Exception as exc:
+        return {
+            "available": False,
+            "error_type": type(exc).__name__,
+            "message": (
+                "O sandbox RLM (Deno/Pyodide) não iniciou. "
+                "No ambiente virtual ativo, reinstale dspy[deno] e confirme uma versão "
+                "compatível do Deno (>=2.0.0,<3.0.0)."
+            ),
+        }
+    return {"available": True, "error_type": None, "message": None}
 
 
 def load_env_file():
@@ -175,10 +201,17 @@ class ReliableSQLGenerator(dspy.Module):
                 _execute_read_only(validation_db, sql)
             return dspy.Prediction(sql_query=sql, success=True, error=None)
         except Exception as exc:
+            if type(exc).__name__ == "CodeInterpreterError":
+                error = (
+                    "O sandbox RLM (Deno/Pyodide) falhou. Execute "
+                    "`python src/server_services.py --preflight` para verificar o runtime."
+                )
+            else:
+                error = f"Falha ao gerar ou validar SQL: {type(exc).__name__}."
             return dspy.Prediction(
                 sql_query="",
                 success=False,
-                error=f"Falha ao gerar ou validar SQL: {type(exc).__name__}.",
+                error=error,
             )
 
 
@@ -220,7 +253,8 @@ def preflight():
         if endpoint_available
         else None
     )
-    deno_path = Path(sys.executable).with_name("deno")
+    rlm_runtime = rlm_runtime_diagnostics()
+    deno_available = shutil.which("deno") is not None or rlm_runtime["available"]
     telegram_configured = bool(os.getenv("TELEGRAM_BOT_TOKEN", "").strip())
     transcription_url = os.getenv("VOICE_TRANSCRIPTION_URL", "").strip()
     transcription_key_configured = bool(os.getenv("VOICE_TRANSCRIPTION_API_KEY", "").strip())
@@ -229,6 +263,8 @@ def preflight():
         wip.append("Iniciar o endpoint LLM configurado.")
     if model_available is not True:
         wip.append("Confirmar LLM_MODEL contra o ID servido em /v1/models.")
+    if not rlm_runtime["available"]:
+        wip.append("Corrigir o sandbox RLM (Deno/Pyodide) antes de consultar o modelo.")
     if not telegram_configured:
         wip.append("Configurar TELEGRAM_BOT_TOKEN.")
     if not transcription_url:
@@ -239,7 +275,8 @@ def preflight():
         "runtime": {
             "dspy_rlm": hasattr(dspy, "RLM"),
             "dspy_gepa": hasattr(dspy, "GEPA"),
-            "deno_binary": deno_path.is_file(),
+            "deno_binary": deno_available,
+            "rlm_sandbox": rlm_runtime,
         },
         "llm": {
             "base_url": base_url,
@@ -401,9 +438,16 @@ def _evaluate_generator(generator):
                 correct = actual == expected
             except sqlite3.Error:
                 pass
-        outcomes.append({"question": question, "safe_select": safe, "correct": correct})
+        outcomes.append({
+            "question": question,
+            "generation_success": bool(prediction.success),
+            "error": prediction.error if not prediction.success else None,
+            "safe_select": safe,
+            "correct": correct,
+        })
     return {
         "cases": outcomes,
+        "generation_failures": sum(not item["generation_success"] for item in outcomes),
         "correct_rate": sum(item["correct"] for item in outcomes) / len(outcomes),
         "safe_query_rate": sum(item["safe_select"] for item in outcomes) / len(outcomes),
     }

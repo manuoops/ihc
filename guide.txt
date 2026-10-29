@@ -83,25 +83,27 @@ CRITÉRIO DE CONCLUSÃO
 Só considerar pronto quando os constraints obrigatórios estiverem atendidos, os itens do professor estiverem implementados ou explicitamente identificados como bloqueados por dependência/runtime, e os critérios de segurança e avaliação tiverem evidência. Nunca afirmar suporte a voz, RLM, GEPA ou avaliação apenas por constarem na documentação.
 
 
-STATUS DE EXECUÇÃO — ATUALIZADO EM 2026-10-28
+STATUS DE EXECUÇÃO — ATUALIZADO EM 2026-10-29
 
-Passo 1 — Levantamento e preservação: 🟡 Código e requisitos conferidos; endpoint LLM está indisponível. “GEMMA 2.4” é ambíguo; exigir o ID servido pelo runtime antes de escolher.
+Última tentativa de retomada (2026-10-29): o repositório foi relido e o Git já continha alterações locais em README.md, guide.txt, log.txt, prompt.txt e src/server_services.py, que foram preservadas. O ambiente virtual atual foi criado a partir de um interpretador embarcado externo e não é adequado para o projeto: ele não consegue carregar o módulo SQLite. Recrie `.venv` usando uma instalação padrão do Python 3.12 ou 3.13; então instale requirements.txt antes de executar `--preflight`, `--evaluate`, `--optimize` ou a avaliação offline. Este diagnóstico não substitui o preflight anterior nem altera as evidências já registradas.
+
+Passo 1 — Levantamento e preservação: 🟢 Endpoint Jan ativo e modelo `gemma-4-E2B-it-IQ4_XS` confirmado em `/v1/models`; chamada direta ao modelo respondeu.
 Passo 2 — Banco de dados: 🟢 SQLite, esquema, carga idempotente e fechamento de recursos implementados e verificados.
 Passo 3 — Segurança SQL: 🟢 Validação no gerador, SQLite em memória, authorizer read-only, limites e casos adversariais verificados.
-Passo 4 — API FastAPI: 🟢 Rota GET, inicialização lifespan, respostas HTTP e erros validados via Uvicorn com gerador determinístico.
-Passo 5 — Bot Telegram: 🟡 Token migrado para .env e validado via getMe; falta validar chat real e endpoint STT.
-Passo 6 — RLM e GEPA: 🟡 RLM/Deno validado com ações determinísticas; falta executar inferência com o modelo escolhido, GEPA e salvar o artefato otimizado.
-Passo 7 — Avaliação: 🟡 Avaliação offline 7/7 e dinâmica determinística 7/7 concluídas; faltam resultados do modelo real e comparação antes/depois GEPA.
+Passo 4 — API FastAPI: 🟢 Rota GET validada via Uvicorn com Jan/RLM/SQLite; pergunta sobre o sabonete retornou HTTP 200 e departamento higiene.
+Passo 5 — Bot Telegram: 🟡 Token validado via getMe sem envio de mensagens; falta validar resposta em uma conversa autorizada. STT não validado e o modelo whisper-1 não aparece na lista servida pelo Jan.
+Passo 6 — RLM e GEPA: 🟡 Uma consulta RLM real via API passou com Jan/Deno; avaliação ampla foi interrompida por alta latência. Falta rodar GEPA e salvar o artefato.
+Passo 7 — Avaliação: 🟡 Segurança offline 7/7 e uma consulta Text2SQL real correta; falta avaliação real completa e comparação antes/depois GEPA.
 Passo 8 — Organização e documentação: 🟢 Dois arquivos Python de lógica, README, requirements, .env.example e log atualizados.
-Passo 9 — Verificação final: 🟡 Sintaxe, diff, segurança, banco, rota e fluxos simulados verificados; integrações reais permanecem pendentes.
+Passo 9 — Verificação final: 🟡 API ponta a ponta com Jan/RLM validada em um caso; avaliação completa, conversa Telegram autorizada e STT real pendentes.
 
 CONTAGEM
-Nota do modelo: a nomenclatura oficial distingue Gemma 2, Gemma 3 4B e Gemma 4 E2B/E4B; confirmar o ID exato no endpoint /v1/models. Referências no README.
-Resultado mais recente de --preflight: DSPy/RLM, GEPA e Deno disponíveis; endpoint LLM indisponível; token Telegram configurado/validado; URL STT presente, mas serviço não validado. Nenhum valor de segredo foi impresso.
-4 de 9 passos estão integralmente concluídos. 5 de 9 possuem itens W.I.P. Esses itens se agrupam em quatro blocos para conclusão:
-1. Confirmar o identificador Gemma e disponibilizar o endpoint LLM.
-2. Executar RLM com o modelo real, rodar GEPA, salvar o artefato e comparar os resultados.
-3. Validar Telegram com token real e transcrição com endpoint/chave reais.
-4. Repetir a avaliação final ponta a ponta com os serviços configurados.
+Nota do modelo: `/v1/models` serviu o ID `gemma-4-E2B-it-IQ4_XS`, confirmado com chamada direta ao modelo. Nenhum ID foi presumido.
+Resultado mais recente de --preflight (2026-10-29): bibliotecas DSPy/RLM/GEPA e Deno 2.9.8 disponíveis; Jan/modelo disponíveis; token Telegram e URL STT configurados; STT ainda não validado. Nenhum valor de segredo foi impresso.
+Retomada mais recente (2026-10-29): o `.venv` atual é inválido por ter sido criado com um interpretador embarcado externo; remova-o, recrie-o com Python padrão e instale as dependências antes de repetir o preflight e as avaliações.
+5 de 9 passos estão integralmente concluídos. 4 de 9 possuem itens W.I.P. Esses itens se agrupam em três blocos para conclusão:
+1. Rodar a avaliação completa e GEPA, salvar o artefato e comparar resultados; a latência do RLM no Jan pode ser alta.
+2. Validar respostas do Telegram somente em conversa autorizada e configurar/validar um serviço de transcrição compatível.
+3. Repetir a avaliação final ponta a ponta com os serviços configurados.
 
 Não marcar os itens W.I.P. como concluídos sem executar e registrar evidências reais.
