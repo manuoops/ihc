@@ -105,3 +105,18 @@ Resultado mais recente de --preflight: DSPy/RLM, GEPA e Deno disponíveis; endpo
 4. Repetir a avaliação final ponta a ponta com os serviços configurados.
 
 Não marcar os itens W.I.P. como concluídos sem executar e registrar evidências reais.
+
+STATUS DE EXECUÇÃO — 2026-10-29 (checkout Windows)
+
+Passo 1 — Levantamento e preflight: 🟡 Sintaxe e serviços conferidos. O endpoint padrão http://localhost:1337/v1 não respondeu; não foi possível confirmar o modelo servido. Deno 2.9.8 instalado; token Telegram e URL STT continuam indisponíveis no .env/ambiente.
+Passo 2 — Banco de dados: 🟢 Inicializações repetidas verificadas; os 3 registros de exemplo permaneceram sem duplicação.
+Passo 3 — Segurança SQL: 🟢 Avaliação offline 7/7 consultas corretas e 7/7 entradas adversariais rejeitadas; DELETE também foi bloqueado no teste do banco e os dados permaneceram intactos.
+Passo 4 — API FastAPI: 🟢 GET /query validado via Uvicorn local com resposta HTTP 200 e JSON esperado usando gerador determinístico.
+Passo 5 — Bot Telegram: 🟡 Sem token neste checkout; validação real do bot e conversa autorizada pendentes.
+Passo 6 — RLM e GEPA: 🟡 DSPy disponibiliza RLM e GEPA e Deno 2.9.8 foi instalado; sem servidor/modelo LLM, não foram executados inferência real, otimização nem criação do artefato.
+Passo 7 — Avaliação: 🟡 Testes offline concluídos; avaliação do modelo real e comparação GEPA pendentes.
+Passo 8 — Organização e documentação: 🟢 Mantidos os dois módulos Python previstos e os arquivos de configuração existentes.
+Passo 9 — Verificação final: 🟡 Sintaxe, API local, idempotência e segurança SQL verificadas; faltam as integrações externas.
+
+CONTAGEM ATUAL
+4 de 9 passos estão completos; 5 de 9 permanecem parciais. Deno está instalado. Para concluir, configurar/confirmar a URL do LLM e o ID servido em /v1/models, configurar TELEGRAM_BOT_TOKEN em .env sem versioná-lo, configurar URL STT (e chave local somente se exigida pelo provedor) e indicar uma conversa de teste autorizada. O usuário informou que o token está pronto, mas o preflight neste checkout não encontrou .env nem a variável; confirmar a configuração local. Não foram impressos nem registrados segredos.

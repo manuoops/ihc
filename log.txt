@@ -157,3 +157,19 @@ Data: 2026-10-28
 - Telegram getMe confirmou token válido sem exibir identidade; nenhum polling ou mensagem foi enviada.
 - Preflight passou a marcar STT como pendente até uma transcrição real, mesmo com URL preenchida.
 - Atualizados status do guia e aviso do README; nenhum segredo foi gravado no log.
+
+29. Verificação neste checkout Windows — 2026-10-29
+- Preflight: DSPy/RLM e GEPA disponíveis; Deno não encontrado no PATH; endpoint padrão http://localhost:1337/v1 indisponível e sem modelo servido para confirmar. TELEGRAM_BOT_TOKEN e VOICE_TRANSCRIPTION_URL ausentes. Nenhum segredo foi impresso.
+- Corrigida a detecção de Deno no preflight para procurar no PATH, em vez de presumir que o binário fica ao lado do Python.
+- Corrigida a URI do SQLite somente leitura com Path.as_uri(); a URI anterior falhava para caminhos Windows.
+- Banco inicializado duas vezes sem duplicação (3 produtos); GET /query via Uvicorn local retornou 200 com JSON; DELETE foi rejeitado e os dados permaneceram intactos.
+- --evaluate-safety: 7/7 consultas corretas e 7/7 entradas adversariais rejeitadas.
+- Parse dos dois módulos Python e git diff --check aprovados.
+- RLM/GEPA com modelo real, artefato otimizado, Telegram real e transcrição real continuam pendentes por dependências/configuração externa.
+
+30. Instalação do runtime RLM — 2026-10-29
+- Instalado Deno 2.9.8 via WinGet (pacote DenoLand.Deno; hash do instalador verificado pelo WinGet).
+- Deno e DSPy RLM/GEPA foram detectados no preflight com PATH atualizado.
+- Endpoint LLM continua indisponível e sem modelo confirmado; URL STT e token Telegram também não foram encontrados pelo preflight.
+- O usuário informou que o token está pronto, mas não há .env no checkout e TELEGRAM_BOT_TOKEN está ausente no processo. Não foi solicitado nem registrado o segredo.
+- Avaliação offline continua aprovada em 7/7 consultas e 7/7 rejeições adversariais. Avaliação RLM/GEPA real e integrações externas não foram simuladas.

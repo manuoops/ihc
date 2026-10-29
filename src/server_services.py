@@ -2,12 +2,12 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sqlite3
-import time
 import sys
+import time
 from contextlib import asynccontextmanager, closing
 from pathlib import Path
-from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 import dspy
@@ -220,7 +220,7 @@ def preflight():
         if endpoint_available
         else None
     )
-    deno_path = Path(sys.executable).with_name("deno")
+    deno_path = shutil.which("deno")
     telegram_configured = bool(os.getenv("TELEGRAM_BOT_TOKEN", "").strip())
     transcription_url = os.getenv("VOICE_TRANSCRIPTION_URL", "").strip()
     transcription_key_configured = bool(os.getenv("VOICE_TRANSCRIPTION_API_KEY", "").strip())
@@ -239,7 +239,7 @@ def preflight():
         "runtime": {
             "dspy_rlm": hasattr(dspy, "RLM"),
             "dspy_gepa": hasattr(dspy, "GEPA"),
-            "deno_binary": deno_path.is_file(),
+            "deno_binary": deno_path is not None,
         },
         "llm": {
             "base_url": base_url,
@@ -299,7 +299,7 @@ def generate(question):
             "results": None,
         }
     try:
-        db_uri = f"file:{quote(str(DB_PATH), safe='/')}?mode=ro"
+        db_uri = f"{DB_PATH.as_uri()}?mode=ro"
         with closing(sqlite3.connect(db_uri, uri=True)) as connection:
             connection.row_factory = sqlite3.Row
             rows = _execute_read_only(connection, result.sql_query)

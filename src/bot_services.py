@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 import telebot
-
+import whisper
 import server_services
 
 
